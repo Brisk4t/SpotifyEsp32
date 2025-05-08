@@ -196,11 +196,11 @@ void Spotify::begin(){
   #ifndef DISABLE_WEB_SERVER
   if(!is_auth()){
     if(_port == 80){
-      snprintf(_redirect_uri,sizeof(_redirect_uri), "http://%s/", WiFi.localIP().toString().c_str());
+      snprintf(_redirect_uri,sizeof(_redirect_uri), "https://%s/", WiFi.localIP().toString().c_str());
       Serial.printf("Go to this url in your Browser to login to spotify or enter your credentials: %s\n", _redirect_uri);
     }
     else{
-      snprintf(_redirect_uri,sizeof(_redirect_uri), "http://%s:%d/", WiFi.localIP().toString().c_str(), _port);
+      snprintf(_redirect_uri,sizeof(_redirect_uri), "https://%s:%d/", WiFi.localIP().toString().c_str(), _port);
       Serial.printf("Go to this url in your Browser to login to spotify or enter your credentials: %s\n", _redirect_uri);
     }
     server_routes();
@@ -237,7 +237,9 @@ response Spotify::RestApi(const char* rest_url, const char* type, int payload_si
     return response_obj;
   }
   _client.println(String(type) + " " + String(rest_url) + " HTTP/1.1");
+  Serial.println(String(type) + " " + String(rest_url) + " HTTP/1.1");
   _client.println("Host: " + String(_host));
+  Serial.println("Host: " + String(_host));
   _client.println("User-Agent: ESP32");
   _client.println("Connection: close");
   _client.println("Accept: application/json");
@@ -1539,6 +1541,44 @@ String Spotify::get_current_album_image_url(int image_int){
     }
     return album_url;
 }
+
+bool Spotify::save_current_album_image(String image_url, String save_path){
+    //filter["item"]["album"]["images"][image_int]["url"] = true;
+
+    int domainEnd = image_url.indexOf(".co") + 3; // 3 is the length of ".co"
+    String CDNPath = image_url.substring(domainEnd);
+
+    // Disconnect from the spotify API and connect to the image URL
+    _client.stop();
+
+    _client.setInsecure(); // Disable SSL certificate verification
+    _client.connect(_cdn_host, 443);
+
+
+    Serial.println("GET " + CDNPath + " HTTP/1.1");
+    Serial.println("Host: " + String(_cdn_host));
+
+    _client.println("GET " + CDNPath + " HTTP/1.1");
+    _client.println("Host: " + String(_cdn_host));
+    _client.println("User-Agent: ESP32");
+    _client.println("Connection: close");
+    _client.println();
+
+    size_t image_size = 0;
+    
+    if (saveToFileFromCDN(save_path)) {
+      Serial.println("✅ Image saved to SPIFFS as " + save_path);
+    } else {
+      Serial.println("❌ Failed to save image");
+    }
+
+    
+    _client.stop(); // Disconnect from the CDN
+    _client.setCACert(_spotify_root_ca);
+
+    return 1;
+}
+
 String Spotify::current_track_name(){
   String track_name = "Something went wrong";
   JsonDocument filter;
@@ -1692,4 +1732,32 @@ void print_response(response response_obj){
   Serial.print("Reply: "); 
   serializeJsonPretty(response_obj.reply, Serial);
   Serial.println();
+}
+
+
+
+bool Spotify::saveToFileFromCDN(const String& path) {
+  File file = SPIFFS.open(path, "w");
+  if (!file) {
+    Serial.println("❌ Failed to open file for writing");
+    return false;
+  }
+
+  // Skip headers
+  while (_client.connected()) {
+    String line = _client.readStringUntil('\n');
+    if (line == "\r") break;
+  }
+
+  uint8_t buffer[256];
+  while (_client.connected() || _client.available()) {
+    size_t available = _client.available();
+    if (available) {
+      size_t len = _client.readBytes(buffer, min(available, sizeof(buffer)));
+      file.write(buffer, len);
+    }
+  }
+
+  file.close();
+  return true;
 }

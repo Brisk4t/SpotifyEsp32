@@ -22,6 +22,7 @@
 #include <WiFiClientSecure.h>
 #include <ArduinoJson.h>
 #include <base64.h>
+#include <SPIFFS.h>
 
 #ifndef DISABLE_TRACKS
 #include <map>
@@ -738,6 +739,10 @@ class Spotify {
     /// @param int image array position
     /// @return Current album cover link as String
     String get_current_album_image_url(int image_int);
+  /// @brief Save current album cover
+    /// @param int image array position
+    /// @return Current album cover link as String
+    bool save_current_album_image(String image_url, String save_path);
     #endif
     /// @brief Convert ID to URI
     /// @param id ID to convert
@@ -766,6 +771,7 @@ class Spotify {
     bool get_refresh_token(const char* auth_code, const char* redirect_uri);
     /// @brief Destroy Object and free used memory
     void end();
+    bool saveToFileFromCDN(const String& path);
     
 
   private:
@@ -793,7 +799,11 @@ class Spotify {
     /// @brief Host for Tokens
     const char* _host = "api.spotify.com";
     /// @brief Base url for API requests
+    const char* _cdn_host = "i.scdn.co";
+    /// @brief Base url for API requests
     const char* _base_url = "https://api.spotify.com/v1/";
+    /// @brief Base url for API requests
+    const char* _cdn_base_url = "https://i.scdn.co/";
     /// @brief Host for Tokens
     const char* _token_host = "accounts.spotify.com";
     /// @brief Maximum number of items in one request
